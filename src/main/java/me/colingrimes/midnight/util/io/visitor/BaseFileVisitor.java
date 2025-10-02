@@ -1,11 +1,11 @@
 package me.colingrimes.midnight.util.io.visitor;
 
-import javax.annotation.Nonnull;
-import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.annotation.Nonnull;
 
 public abstract class BaseFileVisitor<T> extends SimpleFileVisitor<Path> {
 
@@ -14,7 +14,11 @@ public abstract class BaseFileVisitor<T> extends SimpleFileVisitor<Path> {
     private final String packageName;
 
     public BaseFileVisitor(@Nonnull Path startingPath, @Nonnull String packageName) {
-        if (!startingPath.toString().endsWith(packageName.replace(".", File.separator))) {
+        // Normalize paths for comparison - convert both to URI format to handle Windows/Linux differences
+        String normalizedPath = normalizePath(startingPath.toString());
+        String normalizedPackage = packageName.replace(".", "/");
+        
+        if (!normalizedPath.endsWith(normalizedPackage)) {
             throw new IllegalArgumentException("Path " + startingPath + " does not end with " + packageName);
         }
 
@@ -44,13 +48,37 @@ public abstract class BaseFileVisitor<T> extends SimpleFileVisitor<Path> {
      */
     @Nonnull
     String toQualifiedName(@Nonnull Path path) {
-        if (!path.normalize().toUri().toString().startsWith(startingPath.normalize().toUri().toString())) {
+        // Normalize both paths using URI format for consistent comparison
+        String normalizedPath = normalizePath(path.toString());
+        String normalizedStarting = normalizePath(startingPath.toString());
+        
+        if (!normalizedPath.startsWith(normalizedStarting)) {
             throw new IllegalArgumentException("Path " + path + " is not a child of " + startingPath);
         }
 
-        String name = path.toString();
-        name = name.substring(startingPath.toString().length() + 1);
+        String name = path.toString();        
+        int startLength = startingPath.toString().length();
+        if (startLength < name.length() && (name.charAt(startLength) == '/' || name.charAt(startLength) == '\\')) {
+            startLength++;
+        }
+        
+        name = name.substring(startLength);
         name = name.replace(".class", "");
-        return packageName + "." + name.replace(File.separator, ".");
+        
+        // Normalize all separators to dots, handling both Windows and Unix separators
+        name = name.replace("\\", ".").replace("/", ".");
+        
+        return packageName + "." + name;
+    }
+
+    /**
+     * Normalizes a path string by converting all separators to forward slashes.
+     * This ensures consistent path comparison across different operating systems.
+     *
+     * @param path the path to normalize
+     * @return the normalized path
+     */
+    private String normalizePath(String path) {
+        return path.replace("\\", "/");
     }
 }
